@@ -129,6 +129,14 @@ function emptyButton(type: TemplateButton['type']): TemplateButton {
   }
 }
 
+export function sanitizeTemplateName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 512);
+}
+
 export function TemplateManager() {
   const t = useTranslations('Settings.templates');
   // Meta's category ids (stored as-is) → display label in the UI language.
@@ -224,7 +232,7 @@ export function TemplateManager() {
     }
 
     return {
-      name: form.name.trim(),
+      name: editingId !== null ? form.name.trim() : sanitizeTemplateName(form.name),
       category: form.category,
       language: form.language.trim() || 'en_US',
       header_type: form.header_format === 'none' ? undefined : form.header_format,
@@ -270,9 +278,14 @@ export function TemplateManager() {
     // AUTHENTICATION is blocked by the persistent banner + disabled
     // submit button; this is a defensive second line of defense.
     if (form.category === 'Authentication') return;
+    const isEdit = editingId !== null;
+    const cleanName = isEdit ? form.name.trim() : sanitizeTemplateName(form.name);
+    if (!isEdit && (!cleanName || !TEMPLATE_LIMITS.nameRegex.test(cleanName))) {
+      toast.error(t('nameHint'));
+      return;
+    }
     try {
       setSubmitting(true);
-      const isEdit = editingId !== null;
       const url = isEdit
         ? `/api/whatsapp/templates/${editingId}`
         : '/api/whatsapp/templates/submit';
@@ -283,9 +296,10 @@ export function TemplateManager() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(
+        toast.error(
           data?.error || t(isEdit ? 'editFailedHttp' : 'submitFailedHttp', { status: res.status }),
         );
+        return;
       }
       // Refresh first, then close — re-opening the dialog
       // immediately should not show a stale list.
@@ -303,7 +317,6 @@ export function TemplateManager() {
       setForm(emptyForm);
       setEditingId(null);
     } catch (err) {
-      console.error('Submit error:', err);
       toast.error(err instanceof Error ? err.message : t('toastSubmitFailed'));
     } finally {
       setSubmitting(false);
@@ -702,9 +715,14 @@ export function TemplateManager() {
               <Input
                 placeholder={t('namePlaceholder')}
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    name: editingId !== null ? e.target.value : sanitizeTemplateName(e.target.value),
+                  })
+                }
                 disabled={editingId !== null}
-                className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed font-mono text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
                 {editingId

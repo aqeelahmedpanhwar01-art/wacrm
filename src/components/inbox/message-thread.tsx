@@ -500,8 +500,14 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
-          console.error("Failed to send message:", reason);
-          toast.error(t("sendFailed", { reason }));
+          console.warn("Failed to send message:", reason);
+          if (/131030|not in allowed list/i.test(reason)) {
+            toast.error(
+              "Meta Sandbox restriction (#131030): Recipient phone number is not in your allowed test list. Add and verify your number in Meta Developer Portal (WhatsApp → API Setup → 'To' list)."
+            );
+          } else {
+            toast.error(t("sendFailed", { reason }));
+          }
           // Mark the optimistic bubble as failed so the user sees what happened
           onUpdateMessage(tempId, { status: "failed" });
           return;
@@ -512,7 +518,7 @@ export function MessageThread({
         // flip status to 'sent' so the UI stops showing "sending".
         onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
-        console.error("Failed to send message:", err);
+        console.warn("Failed to send message:", err);
         const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("sendFailed", { reason }));
         onUpdateMessage(tempId, { status: "failed" });
